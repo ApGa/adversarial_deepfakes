@@ -1,13 +1,12 @@
 """
-File: classifier.py -- Deepfake Detector Creation
+File: parallelized_classifier.py -- Deepfake Detector Creation (Parallelized across GPUs)
 Authors: Apurva Gandhi and Shomik Jain
 Date: 2/02/2020
 """
 
 # Script Parameters
 
-#MODEL_NAME = 'resnet'
-MODEL_NAME = 'vgg'
+IN_COLAB = False
 
 SOFTMAX = True
 
@@ -15,18 +14,21 @@ BATCH_SIZE = 16
 EPOCHS = 5
 
 USE_HHRELU = True
-USE_REG= False
-REG_STRENGTH = 0
+USE_REG= True
 
 USE_NOISE = False
-NOISE_TYPE = ''
+NOISE_TYPE = 'Cauchy'
 NOISE_1 = 0
-NOISE_2 = 0
+NOISE_2 = 0.01
 
 TRAIN_DIR = "data/train"
 VAL_DIR = 'data/test'
 
-OUTPUT_DIR = "models/vgg_base"
+# Dynamic Parameters
+
+MODEL_NAMES = ['vgg']
+REG_STRENGTHS = [5000]
+OUTPUT_BASE = "models/"
 
 import torch
 import torch.nn as nn
@@ -41,9 +43,28 @@ import os
 import copy
 from tqdm import tqdm
 from torch.autograd import Variable
+
+# Commented out IPython magic to ensure Python compatibility.
+if IN_COLAB: 
+  from pydrive.auth import GoogleAuth
+  from pydrive.drive import GoogleDrive
+  from google.colab import auth
+  from oauth2client.client import GoogleCredentials
+
+  auth.authenticate_user()
+  gauth = GoogleAuth()
+  gauth.credentials = GoogleCredentials.get_application_default()
+  drive = GoogleDrive(gauth)
+
+  hhrelu = drive.CreateFile({'id':'1POLUV1n_5pEZcca3fZKfggVoTJz89sjD'})
+  hhrelu.GetContentFile('HHReLU.py')
+  from google.colab import drive
+  drive.mount('/content/gdrive')
+#   %cd gdrive/My\ Drive/Fuzzy\ Fakes/code
+
 from HHReLU import HHReLU
 
-def make_model_HHReLU(model, model_name=MODEL_NAME):
+def make_model_HHReLU(model, model_name):
   model.relu = HHReLU()
   if 'resnet' in model_name:
     layers = [model.layer1, model.layer2, model.layer3, model.layer4]
@@ -58,7 +79,7 @@ def make_model_HHReLU(model, model_name=MODEL_NAME):
     for i in classifier_relus:
       model.classifier[i].relu = HHReLU()
 
-def lipshitz_regularization(images, model, z=2, train=True, psi=1000, use_softmax=SOFTMAX, num_classes = 2):
+def lipshitz_regularization(images, model, psi, z=2, train=True, use_softmax=SOFTMAX, num_classes = 2):
     if use_softmax:
       repeated_images = images.repeat(num_classes, 1, 1, 1, 1)
       repeated_output = torch.stack([model(repeated_images[0]).sum(axis=0), model(repeated_images[1]).sum(axis=0)])
@@ -79,7 +100,7 @@ def add_noise(input, noise_type=NOISE_TYPE, noise1=NOISE_1, noise2=NOISE_2):
     return torch.clamp(input + noise, 0, 1)  
   return input
 
-def train_model(model, criterion, optimizer, scheduler, use_reg=USE_REG, num_epochs=EPOCHS, use_noise=USE_NOISE, use_softmax=SOFTMAX):
+def train_model(model, criterion, optimizer, scheduler, psi, use_reg=USE_REG, num_epochs=EPOCHS, use_noise=USE_NOISE, use_softmax=SOFTMAX):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -129,7 +150,7 @@ def train_model(model, criterion, optimizer, scheduler, use_reg=USE_REG, num_epo
                       
                       if use_reg:
                         inputs.requires_grad = True
-                        reg = lipshitz_regularization(inputs, model)
+                        reg = lipshitz_regularization(inputs, model, psi)
                         inputs.requires_grad = False
                         loss = loss + reg
 
@@ -183,30 +204,40 @@ dataset_sizes['val'] = len(val_data)
 
 class_names = train_data.classes
 
-if 'vgg' in MODEL_NAME:
-  model_ft = models.vgg16(pretrained=True)
-  num_ftrs = model_ft.classifier[6].in_features
-  model_ft.classifier[6] = nn.Linear(num_ftrs, 2 if SOFTMAX else 1)
-elif 'resnet' in MODEL_NAME:
-  model_ft = models.resnet18(pretrained=True)
-  num_ftrs = model_ft.fc.in_features
-  model_ft.fc = nn.Linear(num_ftrs, 2 if SOFTMAX else 1)
+for MODEL_NAME in MODEL_NAMES:
+  for REG_STRENGTH in REG_STRENGTHS:
+    if 'vgg' in MODEL_NAME and REG_STRENGTH==1:
+      continue
+    OUTPUT_DIR = OUTPUT_BASE + MODEL_NAME + '_reg' + str(REG_STRENGTH)
+    print(MODEL_NAME, REG_STRENGTH)
 
-if USE_HHRELU:
-  make_model_HHReLU(model_ft)
+    if 'vgg' in MODEL_NAME:
+      model_ft = models.vgg16(pretrained=True)
+      num_ftrs = model_ft.classifier[6].in_features
+      model_ft.classifier[6] = nn.Linear(num_ftrs, 2 if SOFTMAX else 1)
+    elif 'resnet' in MODEL_NAME:
+      model_ft = models.resnet18(pretrained=True)
+      num_ftrs = model_ft.fc.in_features
+      model_ft.fc = nn.Linear(num_ftrs, 2 if SOFTMAX else 1)
 
-if SOFTMAX:
-  criterion = nn.CrossEntropyLoss()
-else:
-  criterion = nn.BCEWithLogitsLoss()
+    if USE_HHRELU:
+      make_model_HHReLU(model_ft, MODEL_NAME)
 
-optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
+    if SOFTMAX:
+      criterion = nn.CrossEntropyLoss()
+    else:
+      criterion = nn.BCEWithLogitsLoss()
 
-exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
 
-print(model_ft)
-model_ft = train_model(model_ft.to(device), criterion, optimizer_ft, exp_lr_scheduler)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-torch.save(model_ft, OUTPUT_DIR)
+    print(model_ft)
+    if(torch.cuda.device_count() > 1): 
+    	model_ft = nn.DataParallel(model_ft)
+    model_ft = train_model(model_ft.to(device), criterion, optimizer_ft, exp_lr_scheduler, REG_STRENGTH)
+
+    torch.save(model_ft, OUTPUT_DIR)
+    del model_ft
