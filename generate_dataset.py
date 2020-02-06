@@ -1,3 +1,9 @@
+"""
+File: generate_dataset.py -- Deepfake Generation Script
+Authors: Apurva Gandhi and Shomik Jain
+Date: 2/02/2020
+"""
+
 from models import FaceTranslationGANInferenceModel
 from face_toolbox_keras.models.verifier.face_verifier import FaceVerifier
 from face_toolbox_keras.models.parser import face_parser
