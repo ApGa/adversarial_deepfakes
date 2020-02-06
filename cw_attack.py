@@ -19,9 +19,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 
-import runutils
-
-
 def _var2numpy(var):
     """
     Make Variable to numpy array. No transposition will be made.
