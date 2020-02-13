@@ -21,5 +21,5 @@ The paper uses adversarial perturbations to enhance deepfake images and fool com
 - Carlini-Wagner Attack Paper: https://arxiv.org/abs/1412.6572
 - Carlini-Wagner Attack Implementation: https://github.com/kkew3/pytorch-cw2
 - Lipshitz Regularization Paper: https://www.nature.com/articles/s42256-019-0104-6
-- Deep Image Prior Paper: https://github.com/shaoanlu/fewshot-face-translation-GAN
+- Deep Image Prior Paper: https://arxiv.org/abs/1711.10925
 - Deep Image Prior Implementation: https://github.com/DmitryUlyanov/deep-image-prior
