@@ -15,7 +15,7 @@ The paper uses adversarial perturbations to enhance deepfake images and fool com
 - generate_dataset.py: Deepfake Generation Script
 
 ## References:
-- Deepfake Literature Review: https://arxiv.org/abs/1412.6572
+- Deepfake Literature Review: https://arxiv.org/pdf/1909.11573.pdf
 - Deepfake Creation Implementation: https://github.com/shaoanlu/fewshot-face-translation-GAN
 - Fast Gradient Sign Method Paper: https://arxiv.org/abs/1412.6572
 - Carlini-Wagner Attack Paper: https://arxiv.org/abs/1608.04644
