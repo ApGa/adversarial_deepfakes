@@ -15,6 +15,7 @@ Link to preprint: https://arxiv.org/abs/2003.10596.
 - dip_template.py: Deep Image Prior Defense
 - evaluation.py: Model Evaluation Script
 - generate_dataset.py: Deepfake Generation Script
+- ijcnn_presentation.pdf: Presentation Slides from IJCNN 2020
 
 ## References:
 - Deepfake Literature Review: https://arxiv.org/pdf/1909.11573.pdf
